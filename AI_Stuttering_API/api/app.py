@@ -12,21 +12,56 @@ from datetime import datetime
 # Delete lines 12-40 (the cleanup function and its call)
 
 # Load models
+import os
+import tensorflow as tf
+
+# Get the base directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.path.join(BASE_DIR, "..", "models")
+
+# Debug: Print paths
+print(f"BASE_DIR: {BASE_DIR}")
+print(f"MODELS_DIR: {MODELS_DIR}")
+print(f"MODELS_DIR exists: {os.path.exists(MODELS_DIR)}")
+
+# List files in models directory
+if os.path.exists(MODELS_DIR):
+    print("Files in models directory:")
+    for file in os.listdir(MODELS_DIR):
+        print(f"  - {file}")
+
 model_paths = {
-    'Prolongation': 'AI_Stuttering_API/models/model_Prolongation_3.h5',
-    'Block': 'AI_Stuttering_API/models/model_Block_3.h5',
-    'SoundRep': 'AI_Stuttering_API/models/model_SoundRep_3.h5',
-    'WordRep': 'AI_Stuttering_API/models/model_WordRep_3.h5',
-    'Interjection': 'AI_Stuttering_API/models/model_Interjection_3.h5'
+    'Prolongation': os.path.join(MODELS_DIR, 'model_Prolongation_3.h5'),
+    'Block': os.path.join(MODELS_DIR, 'model_Block_3.h5'),
+    'SoundRep': os.path.join(MODELS_DIR, 'model_SoundRep_3.h5'),
+    'WordRep': os.path.join(MODELS_DIR, 'model_WordRep_3.h5'),
+    'Interjection': os.path.join(MODELS_DIR, 'model_Interjection_3.h5')
 }
+
+# OR if using original names with spaces:
+# model_paths = {
+#     'Prolongation': os.path.join(MODELS_DIR, 'model_Prolongation (3).h5'),
+#     'Block': os.path.join(MODELS_DIR, 'model_Block (3).h5'),
+#     'SoundRep': os.path.join(MODELS_DIR, 'model_SoundRep (3).h5'),
+#     'WordRep': os.path.join(MODELS_DIR, 'model_WordRep (3).h5'),
+#     'Interjection': os.path.join(MODELS_DIR, 'model_Interjection (3).h5')
+# }
+
+# Check each file exists
+for name, path in model_paths.items():
+    if os.path.exists(path):
+        print(f"✅ Model {name} found at: {path}")
+    else:
+        print(f"❌ Model {name} NOT found at: {path}")
 
 models_dict = {}
 for label, path in model_paths.items():
-    model = tf.keras.models.load_model(path)
-    models_dict[label] = model
-
-print("✅ 5 models loaded successfully: ", list(models_dict.keys()))
-
+    try:
+        model = tf.keras.models.load_model(path)
+        models_dict[label] = model
+        print(f"✅ Loaded {label}")
+    except Exception as e:
+        print(f"❌ Failed to load {label}: {e}")
 # Feature extraction function (keep as is)
 def extract_features_from_audio(audio, sr):
     try:
