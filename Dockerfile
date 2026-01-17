@@ -1,5 +1,6 @@
 FROM python:3.10-slim
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -9,15 +10,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy requirements first (better caching)
+# Copy and install requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy everything else
+# Copy application
 COPY . .
 
-# Set working directory
 WORKDIR /app/AI_Stuttering_API/api
 
 EXPOSE 8000
