@@ -1,6 +1,5 @@
 FROM python:3.10-slim
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -10,12 +9,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy and install requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application
 COPY . .
+
+# Debug: Check what was copied
+RUN echo "=== Checking directory structure ===" && \
+    echo "Contents of /app:" && ls -la /app && \
+    echo "Contents of /app/AI_Stuttering_API:" && ls -la /app/AI_Stuttering_API && \
+    echo "Contents of /app/AI_Stuttering_API/models:" && ls -la /app/AI_Stuttering_API/models && \
+    echo "Contents of /app/AI_Stuttering_API/api:" && ls -la /app/AI_Stuttering_API/api
 
 WORKDIR /app/AI_Stuttering_API/api
 
