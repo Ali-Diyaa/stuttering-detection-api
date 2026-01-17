@@ -10,6 +10,7 @@ from datetime import datetime
 import tensorflow as tf
 import h5py
 import numpy as np
+import threading
 
 # Remove all cleanup code - Koyeb handles this
 # Delete lines 12-40 (the cleanup function and its call)
@@ -19,93 +20,53 @@ import os
 import tensorflow as tf
 
 # Custom InputLayer to handle batch_shape vs batch_input_shape
-class CustomInputLayer(tf.keras.layers.InputLayer):
-    """Custom InputLayer to handle batch_shape parameter"""
-    def __init__(self, **kwargs):
-        # Convert batch_shape to batch_input_shape
-        if 'batch_shape' in kwargs:
-            kwargs['batch_input_shape'] = kwargs.pop('batch_shape')
-        super().__init__(**kwargs)
-
-def load_model_with_fix(model_path):
-    """Load model with compatibility fixes for batch_shape issue"""
-    try:
-        # Method 1: Try normal load
-        print(f"Attempting normal load for {model_path}")
-        model = tf.keras.models.load_model(model_path)
-        print("✅ Success with normal load")
-        return model
-    except Exception as e1:
-        print(f"❌ Normal load failed: {str(e1)[:100]}")
-        
-        try:
-            # Method 2: Try with custom objects
-            print("Attempting load with custom objects...")
-            model = tf.keras.models.load_model(
-                model_path,
-                custom_objects={'InputLayer': CustomInputLayer},
-                compile=False
-            )
-            print("✅ Success with custom objects")
-            return model
-        except Exception as e2:
-            print(f"❌ Custom objects failed: {str(e2)[:100]}")
-            
-            try:
-                # Method 3: Try to fix the H5 file
-                print("Attempting to fix H5 file...")
-                with h5py.File(model_path, 'r') as f:
-                    if 'model_config' in f.attrs:
-                        config = f.attrs['model_config']
-                        if isinstance(config, bytes):
-                            config = config.decode('utf-8')
-                        
-                        # Fix batch_shape -> batch_input_shape
-                        config = config.replace('"batch_shape":', '"batch_input_shape":')
-                        
-                        # Create model from fixed config
-                        model = tf.keras.models.model_from_json(config)
-                        
-                        # Load weights
-                        model.load_weights(model_path)
-                        print("✅ Success by fixing H5 file")
-                        return model
-            except Exception as e3:
-                print(f"❌ All methods failed: {str(e3)[:100]}")
-                raise Exception(f"Could not load model: {model_path}")
-
-# Get paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(BASE_DIR, "..", "models")
-
-model_paths = {
-    'Prolongation': os.path.join(MODELS_DIR, 'model_Prolongation_3.h5'),
-    'Block': os.path.join(MODELS_DIR, 'model_Block_3.h5'),
-    'SoundRep': os.path.join(MODELS_DIR, 'model_SoundRep_3.h5'),
-    'WordRep': os.path.join(MODELS_DIR, 'model_WordRep_3.h5'),
-    'Interjection': os.path.join(MODELS_DIR, 'model_Interjection_3.h5')
-}
-
-# Load models
 models_dict = {}
-for label, path in model_paths.items():
-    if os.path.exists(path):
-        print(f"\n=== Loading {label} ===")
-        try:
-            model = load_model_with_fix(path)
-            models_dict[label] = model
-            print(f"✅ Successfully loaded {label}")
-        except Exception as e:
-            print(f"❌ Failed to load {label}: {str(e)[:200]}")
-            models_dict[label] = None
-    else:
-        print(f"❌ Model file not found: {path}")
-        models_dict[label] = None
+models_loaded = False
+models_lock = threading.Lock()
 
-print(f"\n=== Summary ===")
-print(f"Total models: {len(model_paths)}")
-print(f"Successfully loaded: {sum(1 for m in models_dict.values() if m is not None)}")
-print(f"Failed: {sum(1 for m in models_dict.values() if m is None)}")
+def load_model_safe(model_path):
+    """Safely load a single model with timeout"""
+    try:
+        return tf.keras.models.load_model(model_path, compile=False)
+    except Exception as e:
+        print(f"Failed to load {model_path}: {e}")
+        return None
+
+def load_models_background():
+    """Load models in background thread"""
+    global models_dict, models_loaded
+    
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    MODELS_DIR = os.path.join(BASE_DIR, "..", "models")
+    
+    model_paths = {
+        'Prolongation': os.path.join(MODELS_DIR, 'model_Prolongation_3.h5'),
+        'Block': os.path.join(MODELS_DIR, 'model_Block_3.h5'),
+        'SoundRep': os.path.join(MODELS_DIR, 'model_SoundRep_3.h5'),
+        'WordRep': os.path.join(MODELS_DIR, 'model_WordRep_3.h5'),
+        'Interjection': os.path.join(MODELS_DIR, 'model_Interjection_3.h5')
+    }
+    
+    print("🚀 Starting background model loading...")
+    
+    # Load one model at a time to avoid memory issues
+    for label, path in model_paths.items():
+        print(f"Loading {label}...")
+        model = load_model_safe(path)
+        if model:
+            with models_lock:
+                models_dict[label] = model
+            print(f"✅ {label} loaded")
+        else:
+            print(f"❌ {label} failed to load")
+    
+    models_loaded = True
+    print("🎉 All models loaded!")
+
+# Start background loading in a separate thread
+import threading
+threading.Thread(target=load_models_background, daemon=True).start()
+
 # Feature extraction function (keep as is)
 def extract_features_from_audio(audio, sr):
     try:
@@ -151,12 +112,14 @@ async def root():
 # Health check for monitoring
 @app.get("/health")
 async def health():
+    """Health check that indicates if models are loaded"""
+    loaded_count = len([m for m in models_dict.values() if m is not None])
     return {
-        "status": "healthy",
-        "models_loaded": len(models_dict),
-        "memory": "ok"
+        "status": "loading" if not models_loaded else "healthy",
+        "models_loaded": f"{loaded_count}/5",
+        "memory": "ok",
+        "message": "Models are loading in background" if not models_loaded else "Ready"
     }
-
 # Main prediction endpoint (keep your existing code)
 
 @app.post("/predict/")
