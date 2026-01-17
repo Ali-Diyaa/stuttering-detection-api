@@ -7,6 +7,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
 from datetime import datetime
+import tensorflow as tf
+import h5py
+import numpy as np
 
 # Remove all cleanup code - Koyeb handles this
 # Delete lines 12-40 (the cleanup function and its call)
@@ -54,14 +57,55 @@ for name, path in model_paths.items():
     else:
         print(f"❌ Model {name} NOT found at: {path}")
 
+
+
+def safe_load_model(model_path):
+    """Load model with compatibility fixes"""
+    try:
+        # Try normal load first
+        model = tf.keras.models.load_model(model_path)
+        return model
+    except Exception as e:
+        print(f"Normal load failed: {e}")
+        
+        try:
+            # Try custom_objects approach
+            model = tf.keras.models.load_model(
+                model_path,
+                custom_objects={
+                    'batch_shape': None,
+                    'batch_input_shape': None
+                },
+                compile=False
+            )
+            return model
+        except:
+            # Try rebuilding from config
+            with h5py.File(model_path, 'r') as f:
+                config = f.attrs.get('model_config')
+                if config:
+                    config = config.decode('utf-8') if isinstance(config, bytes) else config
+                    # Fix the config
+                    config = config.replace('"batch_shape":', '"batch_input_shape":')
+                    model = tf.keras.models.model_from_json(config)
+                    
+                    # Load weights
+                    model.load_weights(model_path)
+                    return model
+        raise Exception(f"Could not load model: {model_path}")
+
+# Then update your model loading:
 models_dict = {}
 for label, path in model_paths.items():
     try:
-        model = tf.keras.models.load_model(path)
+        model = safe_load_model(path)
         models_dict[label] = model
         print(f"✅ Loaded {label}")
     except Exception as e:
         print(f"❌ Failed to load {label}: {e}")
+
+
+
 # Feature extraction function (keep as is)
 def extract_features_from_audio(audio, sr):
     try:
