@@ -14,11 +14,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the AI_stuttering_API folder (which contains api/ and models/)
-COPY AI_stuttering_API/ ./AI_stuttering_API/
+# Copy the AI_Stuttering_API folder (which contains api/ and models/)
+COPY AI_Stuttering_API/ ./AI_Stuttering_API/
 
-# Set working directory to the api folder inside AI_stuttering_API
-WORKDIR /app/AI_stuttering_API/api
+# Set working directory to the api folder inside AI_Stuttering_API
+WORKDIR /app/AI_Stuttering_API/api
 
 # Expose port
 EXPOSE 8000
