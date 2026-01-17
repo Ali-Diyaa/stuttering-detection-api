@@ -18,20 +18,65 @@ import numpy as np
 import os
 import tensorflow as tf
 
-# Get the base directory
+# Custom InputLayer to handle batch_shape vs batch_input_shape
+class CustomInputLayer(tf.keras.layers.InputLayer):
+    """Custom InputLayer to handle batch_shape parameter"""
+    def __init__(self, **kwargs):
+        # Convert batch_shape to batch_input_shape
+        if 'batch_shape' in kwargs:
+            kwargs['batch_input_shape'] = kwargs.pop('batch_shape')
+        super().__init__(**kwargs)
+
+def load_model_with_fix(model_path):
+    """Load model with compatibility fixes for batch_shape issue"""
+    try:
+        # Method 1: Try normal load
+        print(f"Attempting normal load for {model_path}")
+        model = tf.keras.models.load_model(model_path)
+        print("✅ Success with normal load")
+        return model
+    except Exception as e1:
+        print(f"❌ Normal load failed: {str(e1)[:100]}")
+        
+        try:
+            # Method 2: Try with custom objects
+            print("Attempting load with custom objects...")
+            model = tf.keras.models.load_model(
+                model_path,
+                custom_objects={'InputLayer': CustomInputLayer},
+                compile=False
+            )
+            print("✅ Success with custom objects")
+            return model
+        except Exception as e2:
+            print(f"❌ Custom objects failed: {str(e2)[:100]}")
+            
+            try:
+                # Method 3: Try to fix the H5 file
+                print("Attempting to fix H5 file...")
+                with h5py.File(model_path, 'r') as f:
+                    if 'model_config' in f.attrs:
+                        config = f.attrs['model_config']
+                        if isinstance(config, bytes):
+                            config = config.decode('utf-8')
+                        
+                        # Fix batch_shape -> batch_input_shape
+                        config = config.replace('"batch_shape":', '"batch_input_shape":')
+                        
+                        # Create model from fixed config
+                        model = tf.keras.models.model_from_json(config)
+                        
+                        # Load weights
+                        model.load_weights(model_path)
+                        print("✅ Success by fixing H5 file")
+                        return model
+            except Exception as e3:
+                print(f"❌ All methods failed: {str(e3)[:100]}")
+                raise Exception(f"Could not load model: {model_path}")
+
+# Get paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "..", "models")
-
-# Debug: Print paths
-print(f"BASE_DIR: {BASE_DIR}")
-print(f"MODELS_DIR: {MODELS_DIR}")
-print(f"MODELS_DIR exists: {os.path.exists(MODELS_DIR)}")
-
-# List files in models directory
-if os.path.exists(MODELS_DIR):
-    print("Files in models directory:")
-    for file in os.listdir(MODELS_DIR):
-        print(f"  - {file}")
 
 model_paths = {
     'Prolongation': os.path.join(MODELS_DIR, 'model_Prolongation_3.h5'),
@@ -41,71 +86,26 @@ model_paths = {
     'Interjection': os.path.join(MODELS_DIR, 'model_Interjection_3.h5')
 }
 
-# OR if using original names with spaces:
-# model_paths = {
-#     'Prolongation': os.path.join(MODELS_DIR, 'model_Prolongation (3).h5'),
-#     'Block': os.path.join(MODELS_DIR, 'model_Block (3).h5'),
-#     'SoundRep': os.path.join(MODELS_DIR, 'model_SoundRep (3).h5'),
-#     'WordRep': os.path.join(MODELS_DIR, 'model_WordRep (3).h5'),
-#     'Interjection': os.path.join(MODELS_DIR, 'model_Interjection (3).h5')
-# }
-
-# Check each file exists
-for name, path in model_paths.items():
-    if os.path.exists(path):
-        print(f"✅ Model {name} found at: {path}")
-    else:
-        print(f"❌ Model {name} NOT found at: {path}")
-
-
-
-def safe_load_model(model_path):
-    """Load model with compatibility fixes"""
-    try:
-        # Try normal load first
-        model = tf.keras.models.load_model(model_path)
-        return model
-    except Exception as e:
-        print(f"Normal load failed: {e}")
-        
-        try:
-            # Try custom_objects approach
-            model = tf.keras.models.load_model(
-                model_path,
-                custom_objects={
-                    'batch_shape': None,
-                    'batch_input_shape': None
-                },
-                compile=False
-            )
-            return model
-        except:
-            # Try rebuilding from config
-            with h5py.File(model_path, 'r') as f:
-                config = f.attrs.get('model_config')
-                if config:
-                    config = config.decode('utf-8') if isinstance(config, bytes) else config
-                    # Fix the config
-                    config = config.replace('"batch_shape":', '"batch_input_shape":')
-                    model = tf.keras.models.model_from_json(config)
-                    
-                    # Load weights
-                    model.load_weights(model_path)
-                    return model
-        raise Exception(f"Could not load model: {model_path}")
-
-# Then update your model loading:
+# Load models
 models_dict = {}
 for label, path in model_paths.items():
-    try:
-        model = safe_load_model(path)
-        models_dict[label] = model
-        print(f"✅ Loaded {label}")
-    except Exception as e:
-        print(f"❌ Failed to load {label}: {e}")
+    if os.path.exists(path):
+        print(f"\n=== Loading {label} ===")
+        try:
+            model = load_model_with_fix(path)
+            models_dict[label] = model
+            print(f"✅ Successfully loaded {label}")
+        except Exception as e:
+            print(f"❌ Failed to load {label}: {str(e)[:200]}")
+            models_dict[label] = None
+    else:
+        print(f"❌ Model file not found: {path}")
+        models_dict[label] = None
 
-
-
+print(f"\n=== Summary ===")
+print(f"Total models: {len(model_paths)}")
+print(f"Successfully loaded: {sum(1 for m in models_dict.values() if m is not None)}")
+print(f"Failed: {sum(1 for m in models_dict.values() if m is None)}")
 # Feature extraction function (keep as is)
 def extract_features_from_audio(audio, sr):
     try:
