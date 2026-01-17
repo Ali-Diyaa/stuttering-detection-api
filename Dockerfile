@@ -12,14 +12,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Ensure python-multipart is installed
+RUN pip install --no-cache-dir python-multipart
 
-# Debug: Check what was copied
-RUN echo "=== Checking directory structure ===" && \
-    echo "Contents of /app:" && ls -la /app && \
-    echo "Contents of /app/AI_Stuttering_API:" && ls -la /app/AI_Stuttering_API && \
-    echo "Contents of /app/AI_Stuttering_API/models:" && ls -la /app/AI_Stuttering_API/models && \
-    echo "Contents of /app/AI_Stuttering_API/api:" && ls -la /app/AI_Stuttering_API/api
+COPY . .
 
 WORKDIR /app/AI_Stuttering_API/api
 
