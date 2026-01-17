@@ -13,11 +13,11 @@ from datetime import datetime
 
 # Load models
 model_paths = {
-    'Prolongation': 'models/model_Prolongation_3.h5',
-    'Block': 'models/model_Block_3.h5',
-    'SoundRep': 'models/model_SoundRep_3.h5',
-    'WordRep': 'models/model_WordRep_3.h5',
-    'Interjection': 'models/model_Interjection_3.h5'
+    'Prolongation': 'AI_Stuttering_API/models/model_Prolongation_3.h5',
+    'Block': 'AI_Stuttering_API/models/model_Block_3.h5',
+    'SoundRep': 'AI_Stuttering_API/models/model_SoundRep_3.h5',
+    'WordRep': 'AI_Stuttering_API/models/model_WordRep_3.h5',
+    'Interjection': 'AI_Stuttering_API/models/model_Interjection_3.h5'
 }
 
 models_dict = {}
