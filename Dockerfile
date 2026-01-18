@@ -1,5 +1,6 @@
 FROM python:3.10-slim
 
+# Install system dependencies for librosa
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libsndfile1 \
@@ -7,20 +8,15 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy requirements first
+# Copy requirements first (better caching)
 COPY requirements.txt .
-
-# Install NumPy FIRST, then TensorFlow
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir numpy==1.23.5 && \
     pip install --no-cache-dir -r requirements.txt
 
-# Verify installations
-RUN python -c "import numpy; print(f'NumPy: {numpy.__version__}'); import tensorflow as tf; print(f'TensorFlow: {tf.__version__}')"
+# Copy application
+COPY app.py .
 
-COPY api/ ./api/
-COPY models/ ./models/
+EXPOSE 8000
 
-WORKDIR /app/api
-
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--timeout-keep-alive", "600"]
+# Run FastAPI with settings for production
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
